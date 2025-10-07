@@ -4,7 +4,7 @@ from cedargrove_nau7802 import NAU7802
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Int32
+from std_msgs.msg import Int32, Float32
 
 # mostly copied from Adafruit example:
 #https://github.com/adafruit/CircuitPython_NAU7802/blob/main/examples/nau7802_simpletest.py
@@ -44,14 +44,49 @@ def read_raw_value(samples=2):
 class NAU7802DriverNode:
     def __init__(self, node: Node, freq: float = 10.0):
         self.node = node
-        self.publisher = node.create_publisher(Int32, 'sensor/load_cell/raw', 10)
-        self.msg = Int32()
-        self.timer = node.create_timer(1.0 / freq, self.publish)
 
-    def publish(self):
-        self.msg.data = read_raw_value()
-        self.publisher.publish(self.msg)
-        self.node.get_logger().info(f'Publishing: {self.msg.data}')
+        # 42.5k: no load
+        # 200k: rope(~300gr) + hook(~300gr) = 600gr~
+        # 370k: rope(~300gr) + hook(~300gr) + (fake sam + bottle)(~1500gr) = 2100gr~
+        # these make little sense, something is off with the  weighting i mention here!
+        # format: [raw value, grams, raw value, grams, ...]
+        self.node.declare_parameter('calibration_values', [42500, 0, 200000, 600, 370000, 2100])
+        calibration_values = self.node.get_parameter('calibration_values').get_parameter_value().double_array_value
+        self.raw_values = [int(calibration_values[i]) for i in range(0, len(calibration_values), 2)]
+        self.gram_values = [int(calibration_values[i]) for i in range(1, len(calibration_values), 2)]
+
+        self.node.declare_parameter('raw_topic', 'sensor/load_cell_raw')
+        self.raw_topic = self.node.get_parameter('raw_topic').get_parameter_value().string_value
+        self.raw_publisher = node.create_publisher(Int32, self.raw_topic, 10)
+        self.raw_msg = Int32()
+        self.raw_timer = node.create_timer(1.0 / freq, self.publish_raw)
+
+        self.node.declare_parameter('calibrated_topic', 'sensor/load_cell_weight')
+        self.calibrated_topic = self.node.get_parameter('calibrated_topic').get_parameter_value().string_value
+        self.calibrated_publisher = node.create_publisher(Float32, self.calibrated_topic, 10)
+        self.calibrated_msg = Float32()
+        self.calibrated_timer = node.create_timer(1.0 / freq, self.publish_calibrated)
+
+    def publish_calibrated(self):
+        raw = read_raw_value()
+        for i in range(len(self.raw_values)-1):
+            if raw >= self.raw_values[i] and raw <= self.raw_values[i+1]:
+                # linear interpolation
+                self.calibrated_msg.data = self.gram_values[i] + (raw - self.raw_values[i]) * (self.gram_values[i+1] - self.gram_values[i]) / (self.raw_values[i+1] - self.raw_values[i])
+                break
+        else:
+            if raw < self.raw_values[0]:
+                self.calibrated_msg.data = 0
+            else:
+                # extrapolate from last two points
+                self.calibrated_msg.data = self.gram_values[-2] + (raw - self.raw_values[-2]) * (self.gram_values[-1] - self.gram_values[-2]) / (self.raw_values[-1] - self.raw_values[-2])
+        self.calibrated_publisher.publish(self.calibrated_msg)
+        self.node.get_logger().info(f'Publishing: {self.calibrated_msg.data}')
+
+    def publish_raw(self):
+        self.raw_msg.data = read_raw_value()
+        self.raw_publisher.publish(self.raw_msg)
+        self.node.get_logger().info(f'Publishing: {self.raw_msg.data}')
 
 
 
@@ -76,13 +111,11 @@ def __main__():
     
     nau7802.enable(False)  # Disable ADC when done
 
-    node.destroy_timer(nau7802_driver_node.timer)
+    node.destroy_timer(nau7802_driver_node.raw_timer)
     node.destroy_node()
     rclpy.shutdown()
 
-    # 42.5k: no load, no zeroing
-    # 200k: rope + hook
-    # 370k: rope + hook + fake sam + bottle
+
 
 
 if __name__ == '__main__':
