@@ -57,14 +57,14 @@ class NAU7802DriverNode:
 
 
 def __main__():
-    print("Calibrating loadcell, please wait...")
+    # print("Calibrating loadcell, please wait...")
     enabled = nau7802.enable(True)
     print("Digital and analog power enabled:", enabled)
-    print("REMOVE WEIGHTS FROM LOAD CELLS IN 3 SECONDS")
-    time.sleep(3)
+    # print("REMOVE WEIGHTS FROM LOAD CELLS IN 3 SECONDS")
+    # time.sleep(3)
 
     nau7802.channel = 1
-    zero_channel()  # Calibrate and zero channel
+    # zero_channel()  # Calibrate and zero channel
 
     print("Publishing...")
 
@@ -79,6 +79,10 @@ def __main__():
     node.destroy_timer(nau7802_driver_node.timer)
     node.destroy_node()
     rclpy.shutdown()
+
+    # 42.5k: no load, no zeroing
+    # 200k: rope + hook
+    # 370k: rope + hook + fake sam + bottle
 
 
 if __name__ == '__main__':
