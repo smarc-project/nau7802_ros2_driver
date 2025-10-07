@@ -45,6 +45,10 @@ class NAU7802DriverNode:
     def __init__(self, node: Node, freq: float = 10.0):
         self.node = node
 
+        enabled = nau7802.enable(True)
+        self.log("Digital and analog power enabled:", enabled)
+        nau7802.channel = 1
+
         # 42.5k: no load
         # 200k: rope(~300gr) + hook(~300gr) = 600gr~
         # 370k: rope(~300gr) + hook(~300gr) + (fake sam + bottle)(~1500gr) = 2100gr~
@@ -76,7 +80,7 @@ class NAU7802DriverNode:
                 break
         else:
             if raw < self.raw_values[0]:
-                self.calibrated_msg.data = 0
+                self.calibrated_msg.data = self.gram_values[0]
             else:
                 # extrapolate from last two points
                 self.calibrated_msg.data = self.gram_values[-2] + (raw - self.raw_values[-2]) * (self.gram_values[-1] - self.gram_values[-2]) / (self.raw_values[-1] - self.raw_values[-2])
@@ -88,30 +92,26 @@ class NAU7802DriverNode:
         self.raw_publisher.publish(self.raw_msg)
         self.node.get_logger().info(f'Publishing: {self.raw_msg.data}')
 
+    def log(self, *args):
+        self.node.get_logger().info(" ".join([str(a) for a in args]))
+
+    def exit(self):
+        self.log("Exiting, disabling ADC")
+        nau7802.enable(False)  # Disable ADC when done
+        self.node.destroy_timer(self.raw_timer)
+        self.node.destroy_timer(self.calibrated_timer)
+        self.log("Ded.")
 
 
 
 def __main__():
-    # print("Calibrating loadcell, please wait...")
-    enabled = nau7802.enable(True)
-    print("Digital and analog power enabled:", enabled)
-    # print("REMOVE WEIGHTS FROM LOAD CELLS IN 3 SECONDS")
-    # time.sleep(3)
-
-    nau7802.channel = 1
-    # zero_channel()  # Calibrate and zero channel
-
-    print("Publishing...")
-
     rclpy.init()
     node = Node('nau7802_driver_node')
     nau7802_driver_node = NAU7802DriverNode(node)
 
     rclpy.spin(node)
-    
-    nau7802.enable(False)  # Disable ADC when done
 
-    node.destroy_timer(nau7802_driver_node.raw_timer)
+    nau7802_driver_node.exit()
     node.destroy_node()
     rclpy.shutdown()
 
