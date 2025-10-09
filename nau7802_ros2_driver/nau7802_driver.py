@@ -50,16 +50,12 @@ class NAU7802DriverNode:
         nau7802.channel = 1
 
         # 42.5k: no load
-        # 200k: rope(~300gr) + hook(~300gr) = 600gr~
-        # 370k: rope(~300gr) + hook(~300gr) + (fake sam + bottle)(~1500gr) = 2100gr~
+        # 200k: rope + hook = 790gr
+        # 370k: rope + hook + (fake sam + bottle)(0.995gr) = 0.790+0.995 
         # these make little sense, something is off with the  weighting i mention here!
-        # format: [raw value, grams, raw value, grams, ...]
-        # self.node.declare_parameter('calibration_values', [42500, 0, 200000, 790, 370000, 995])
-        # calibration_values = self.node.get_parameter('calibration_values').get_parameter_value().double_array_value
-        calibration_values = [42500, 0, 200000, 0.790, 370000, 0.995]
-        self.raw_values = [int(calibration_values[i]) for i in range(0, len(calibration_values), 2)]
-        self.gram_values = [float(calibration_values[i]) for i in range(1, len(calibration_values), 2)]
-        self.log("Calibration values (raw -> grams):", list(zip(self.raw_values, self.gram_values)))
+        self.raw_values = [42500, 200000, 370000]
+        self.kg_values = [0.0, 0.790, 0.790+0.995]
+        self.log("Calibration values (raw -> grams):", list(zip(self.raw_values, self.kg_values)))
 
         self.node.declare_parameter('raw_topic', 'sensor/load_cell_raw')
         self.raw_topic = self.node.get_parameter('raw_topic').get_parameter_value().string_value
@@ -78,20 +74,19 @@ class NAU7802DriverNode:
         for i in range(len(self.raw_values)-1):
             if raw >= self.raw_values[i] and raw <= self.raw_values[i+1]:
                 # linear interpolation
-                self.calibrated_msg.data = float(self.gram_values[i] + (raw - self.raw_values[i]) * (self.gram_values[i+1] - self.gram_values[i]) / (self.raw_values[i+1] - self.raw_values[i]))
+                self.calibrated_msg.data = float(self.kg_values[i] + (raw - self.raw_values[i]) * (self.kg_values[i+1] - self.kg_values[i]) / (self.raw_values[i+1] - self.raw_values[i]))
                 break
             elif raw < self.raw_values[0]:
-                self.calibrated_msg.data = float(self.gram_values[0])
+                self.calibrated_msg.data = float(self.kg_values[0])
             else:
                 # extrapolate from last two points
-                self.calibrated_msg.data = float(self.gram_values[-2] + (raw - self.raw_values[-2]) * (self.gram_values[-1] - self.gram_values[-2]) / (self.raw_values[-1] - self.raw_values[-2]))
+                self.calibrated_msg.data = float(self.kg_values[-2] + (raw - self.raw_values[-2]) * (self.kg_values[-1] - self.kg_values[-2]) / (self.raw_values[-1] - self.raw_values[-2]))
         self.calibrated_publisher.publish(self.calibrated_msg)
-        self.node.get_logger().info(f'Publishing: {self.calibrated_msg.data}')
+        self.log("Calibrated:", self.calibrated_msg.data, "kg from raw:", raw)
 
     def publish_raw(self):
         self.raw_msg.data = read_raw_value()
         self.raw_publisher.publish(self.raw_msg)
-        self.node.get_logger().info(f'Publishing: {self.raw_msg.data}')
 
     def log(self, *args):
         self.node.get_logger().info(" ".join([str(a) for a in args]))
