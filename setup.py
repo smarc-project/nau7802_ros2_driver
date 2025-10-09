@@ -20,6 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'nau7802_ros2_driver = nau7802_ros2_driver.nau7802_driver:__main__',
         ],
     },
 )
