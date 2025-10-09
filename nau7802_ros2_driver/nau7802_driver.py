@@ -52,7 +52,6 @@ class NAU7802DriverNode:
         # 42.5k: no load
         # 200k: rope + hook = 790gr
         # 370k: rope + hook + (fake sam + bottle)(0.995gr) = 0.790+0.995 
-        # these make little sense, something is off with the  weighting i mention here!
         self.raw_values = [42500, 200000, 370000]
         self.kg_values = [0.0, 0.790, 0.790+0.995]
         self.log("Calibration values (raw -> grams):", list(zip(self.raw_values, self.kg_values)))
