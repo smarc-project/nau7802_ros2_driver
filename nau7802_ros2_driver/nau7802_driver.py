@@ -49,11 +49,10 @@ class NAU7802DriverNode:
         self.log("Digital and analog power enabled:", enabled)
         nau7802.channel = 1
 
-        # 42.5k: no load
-        # 200k: rope + hook = 790gr
-        # 370k: rope + hook + (fake sam + bottle)(0.995gr) = 0.790+0.995 
-        self.raw_values = [42500, 200000, 370000]
-        self.kg_values = [0.0, 0.790, 0.790+0.995]
+        # 4 50kg loadcells, mounted with plate
+        # Clamped down, so we need to remove the clamping force from everything after
+        self.raw_values = [766201, 892075]
+        self.kg_values = [0.0, 2.0]
         self.log("Calibration values (raw -> grams):", list(zip(self.raw_values, self.kg_values)))
 
         self.node.declare_parameter('raw_topic', 'sensor/load_cell_raw')
